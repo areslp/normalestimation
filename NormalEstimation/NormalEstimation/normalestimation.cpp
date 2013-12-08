@@ -81,8 +81,8 @@ void NormalEstimation::open(){
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
     pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
 
-    int neighbor_nb=500;
-    Parameter::instance()->k=50;
+    int neighbor_nb=200;
+    Parameter::instance()->k=100;
 	
 	QByteArray ba = path.toLatin1();
 	const char *c_str2 = ba.data();
@@ -119,15 +119,15 @@ void NormalEstimation::open(){
     timer.reset();
     // for each point
     #pragma omp parallel for
-	for (int i=0;i<cloud->size();i++)
+    for (int i=0;i<cloud->size();i++)
 	{
         double curvature=normals->points[i].curvature;
-        if ( curvature < 0.01 )
-        {
-            out_normals->points[i]=normals->points[i];
-            ++skip;
-            continue;
-        }
+        // if ( curvature < 0.01 )
+        // {
+            // out_normals->points[i]=normals->points[i];
+            // ++skip;
+            // continue;
+        // }
         std::map<int,int> mapping;
         int curIdx;
 		pcl::PointXYZ searchPoint=cloud->points[i];
@@ -155,12 +155,16 @@ void NormalEstimation::open(){
 			double lambda=Parameter::instance()->lambda;
             
             // timer.reset();
-			MatrixXd Z=NormalUtil::optimization(X,lambda);
+			// MatrixXd Z=NormalUtil::optimization(X,lambda);
+            MatrixXd U,V,P;
+            VectorXd s;
+            NormalUtil::optimization(X,lambda,U,s,V,P);
             // passed=timer.getTime();
             // qDebug()<<"optimization takes="<<passed;
 
             // timer.reset();
-            vcluster labels=NormalUtil::spectral_clustering(Z);
+            // vcluster labels=NormalUtil::spectral_clustering(Z);
+            vcluster labels=NormalUtil::spectral_clustering(U,s,V,P);
             // passed=timer.getTime(); 
             // qDebug()<<"spectral takes="<<passed;
 
@@ -191,7 +195,6 @@ void NormalEstimation::open(){
             }
             // passed=timer.getTime(); 
             // qDebug()<<"update normal takes="<<passed;
-            // qDebug()<<"nx="<<nx<<",ny="<<ny<<",nz="<<nz;
             out_normals->points[i]=pcl::Normal(nx,ny,nz);
 		}
 	}

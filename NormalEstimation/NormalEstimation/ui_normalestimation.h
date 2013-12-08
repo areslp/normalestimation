@@ -1,7 +1,7 @@
 /********************************************************************************
 ** Form generated from reading UI file 'normalestimation.ui'
 **
-** Created: Sun Dec 8 01:21:15 2013
+** Created: Sun Dec 8 03:48:53 2013
 **      by: Qt User Interface Compiler version 4.8.1
 **
 ** WARNING! All changes made in this file will be lost when recompiling UI file!

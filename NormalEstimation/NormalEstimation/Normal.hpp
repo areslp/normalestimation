@@ -43,6 +43,7 @@ public:
 	static void readPointCloud(std::string, pcl::PointCloud<pcl::PointXYZ>::Ptr, pcl::PointCloud<pcl::Normal>::Ptr);
 	static pcl::PointCloud<pcl::Normal>::Ptr estimatePCANormal(pcl::PointCloud<pcl::PointXYZ>::Ptr,int);
 	static Eigen::MatrixXd optimization(Eigen::MatrixXd& X,double lambda);
+	static void optimization(Eigen::MatrixXd& X,double lambda,Eigen::MatrixXd& U,Eigen::VectorXd& s,Eigen::MatrixXd& V,Eigen::MatrixXd& P);
 	static Eigen::MatrixXd orth(Eigen::MatrixXd&);
 	static MatrixXd solve_l21(MatrixXd &, double);
 	static int solve_svs(MatrixXd &, double, MatrixXd&, VectorXd&, MatrixXd&);
@@ -50,7 +51,9 @@ public:
 	static double eps();
     static double norm2(MatrixXd&);
 	static int predictClusterNumber(MatrixXd&, double tau);
+	static int predictClusterNumber(const VectorXd&, double tau);
 	static vcluster spectral_clustering(MatrixXd&);
+    static vcluster spectral_clustering(Eigen::MatrixXd& U,Eigen::VectorXd& s,Eigen::MatrixXd& V,Eigen::MatrixXd& P);
     static MatrixXd compute_laplacian(MatrixXd&);
     static void write_pointset(pcl::PointCloud<pcl::PointXYZ>::Ptr points, pcl::PointCloud<pcl::Normal>::Ptr normals, std::string filename);
 

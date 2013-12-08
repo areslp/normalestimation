@@ -25,4 +25,9 @@ typedef pair<matrix, matrix> decomposition;
 
 vcluster spectral(const vpoint& points, uint k, double threshold, uint neighbors, double sigma2, uint retries);
 vcluster spectral(matrix&, uint k, double threshold, uint retries);
+vcluster spectral(const Eigen::MatrixXd&, int k); //直接传特征向量过来
+
+
 vcluster just_k_means(const vpoint& points, uint k, double threshold, uint retries);
+
+vcluster kmlocal_kmeans(vector<vector<double> > data, int k);

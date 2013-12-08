@@ -1,5 +1,6 @@
 #include "spectral.h"
 #include "k_means.hpp"
+#include "KMlocal.h"            // k-means algorithms
 
 ostream& operator<<(ostream& o, const point& p) {
     o << "(" << p.first << ", " << p.second << ")";
@@ -79,8 +80,8 @@ vcluster spectral(const vpoint& points, uint k, double threshold, uint neighbors
 #include <pcl/common/time.h>
 #include<QtDebug>
 vcluster spectral(matrix& W, uint k, double threshold, uint retries) {
-	pcl::StopWatch timer;
-	double passed=0.0;
+	// pcl::StopWatch timer;
+	// double passed=0.0;
 	int i,j,n=W.rows();
     matrix D = diagonal(W);
 	GeneralizedSelfAdjointEigenSolver<matrix> solve(D-W, D);
@@ -90,7 +91,62 @@ vcluster spectral(matrix& W, uint k, double threshold, uint retries) {
 	//qDebug()<<"n="<<n<<", k="<<k;
 	//passed=timer.getTime();
 	//qDebug()<<"prepare for kmeans takes="<<passed;
-	return k_means(eigenvectors, k, threshold, retries);
+    return k_means(eigenvectors, k, threshold, retries);
+	// return kmlocal_kmeans(eigenvectors, k);
+}
+
+vcluster spectral(const Eigen::MatrixXd& eigenvectors, int k){
+    int n=eigenvectors.rows();
+    int i,j;
+    vector<vector<double>> evs(n, vector<double>(k));
+	forn(i, n) forn(j, int(k)) evs[i][j] = eigenvectors(i, j);
+    return k_means(evs, k, 0.01, 100);
+} //直接传特征向量过来
+
+vcluster kmlocal_kmeans(vector<vector<double> > data, int k){
+    KMterm  term(100, 0, 0, 0,      // run for 100 stages
+        0.10,           // min consec RDL
+        0.10,           // min accum RDL
+        3,          // max run stages
+        0.50,           // init. prob. of acceptance
+        10,         // temp. run length
+        0.95);          // temp. reduction factor 
+    int dim=data[0].size();
+    int nPts=data.size();
+    KMdata dataPts(dim, nPts);        // allocate data storage
+
+    for ( int i = 0; i < nPts; ++i )
+    {
+        KMpoint& p=dataPts[i];
+        vector<double>& dp=data[i];
+        for (int d = 0; d < dim; d++) {
+            p[d]=dp[d];
+        }
+    }
+
+    dataPts.setNPts(nPts);          // set actual number of pts
+    dataPts.buildKcTree();          // build filtering structure
+
+    KMfilterCenters ctrs(k, dataPts);       // allocate centers
+
+                            // run each of the algorithms
+    KMlocalLloyds kmLloyds(ctrs, term);     // repeated Lloyd's
+    ctrs = kmLloyds.execute();          // execute
+
+    KMctrIdxArray closeCtr = new KMctrIdx[dataPts.getNPts()];
+    double* sqDist = new double[dataPts.getNPts()];
+    ctrs.getAssignments(closeCtr, sqDist);
+
+    vcluster result(nPts,0);
+    for ( int i = 0; i < nPts; ++i )
+    {
+        result[i]=closeCtr[i];
+    }
+
+    delete [] closeCtr;
+    delete [] sqDist;
+
+    return result;
 }
 
 vcluster just_k_means(const vpoint& points, uint k, double threshold, uint retries) {

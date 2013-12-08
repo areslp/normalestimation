@@ -202,6 +202,88 @@ void NormalUtil::solve_soft(MatrixXd& X, double tau){
 	// TODO: not implemented yet
 }
 
+
+void NormalUtil::optimization(Eigen::MatrixXd& X,double lambda,Eigen::MatrixXd& U,Eigen::VectorXd& s,Eigen::MatrixXd& V,Eigen::MatrixXd& P){
+	// acc as lrr
+	MatrixXd T=X.adjoint();
+	P=orth(T);
+	int r=P.cols();
+	MatrixXd A=X*P;
+	// parameters
+	bool convergenced=false;
+	int iter=0;
+	double rho=1.9;
+	double normfX=X.norm();
+	double tol1=1e-4;
+	double tol2=1e-5;
+	int d=X.rows();
+	int n=X.cols();
+	int maxIter=1000;
+	double max_mu=1e10;
+	double norm2X=norm2(X);
+	double mu=min(d,n)*tol2;
+	MatrixXd Xg=X;
+	double eta=norm2X*norm2X*1.02;
+	// init vars
+	int sv=1;
+	U=MatrixXd::Zero(r,sv);
+	V=MatrixXd::Zero(n,sv);
+	s=VectorXd::Zero(sv,1);
+	MatrixXd AZ=MatrixXd::Zero(d,n);
+	MatrixXd E=MatrixXd::Zero(d,n);
+	MatrixXd Y=MatrixXd::Zero(d,n);
+	MatrixXd Ek=E;
+	MatrixXd Uk=U;
+	VectorXd sk=s;
+	MatrixXd Vk=V;
+	int svp=0;
+	// main loop
+	while (iter<maxIter)
+	{
+		Ek=E;
+		Uk=U;
+		sk=s;
+		Vk=V;
+		MatrixXd T=X-AZ+Y/mu;
+		E=solve_l21(T,lambda/mu);
+		//qDebug()<<"E is finite?------>"<<is_finite(E);
+		T=U*s.asDiagonal()*V.adjoint()+A.adjoint()*(X-AZ-E+Y/mu)/eta;
+		// qDebug()<<"T is finite?------>"<<is_finite(T);
+		svp=solve_svs(T,1/(mu*eta),U,s,V);
+		// T=U*s.asDiagonal()*V.adjoint();
+		// qDebug()<<"Z is finite?------>"<<is_finite(T);
+		// check convergence
+		double diffZ=sqrt(abs(s.norm()*s.norm()+sk.norm()*sk.norm()-
+			2*((s.asDiagonal()*(V.adjoint()*Vk)).cwiseProduct((U.adjoint()*Uk)*sk.asDiagonal())).sum()));
+		double relChgZ=diffZ/normfX;
+		double relChgE=(E-Ek).norm()/normfX;
+		//qDebug()<<"relChgZ="<<relChgZ;
+		//qDebug()<<"relChgE="<<relChgE;
+		double relChg=max(relChgE,relChgZ);
+		AZ=A*U;
+		for (int i=0;i<U.cols();i++)
+		{
+			AZ.col(i)*=s(i);
+		}
+		AZ*=V.adjoint();
+		MatrixXd dY=X-AZ-E;
+		double recErr=dY.norm()/normfX;
+		convergenced=(recErr<tol1) && (relChg<tol2);
+		// if (convergenced || iter==maxIter-1 || iter % 1 ==0)
+		// {
+		// qDebug()<<"iter="<<iter+1<<",mu="<<QString("%1").arg(mu,0,'g',10)<<",rank(Z)="<<svp<<",relChg="<<relChg<<",recErr="<<recErr;
+		// }
+		if (convergenced)
+		{
+			break;
+		}
+		Y=Y+mu*dY;
+		mu=min(max_mu,mu*rho);
+		iter++;
+	}
+}
+
+
 Eigen::MatrixXd NormalUtil::optimization(Eigen::MatrixXd& X,double lambda){
 	// acc as lrr
 	MatrixXd T=X.adjoint();
@@ -282,8 +364,29 @@ Eigen::MatrixXd NormalUtil::optimization(Eigen::MatrixXd& X,double lambda){
 	}
 
 	MatrixXd Z=U*s.asDiagonal()*V.adjoint();
+    // save2file(U,"U.txt");
+    // save2file(s,"s.txt");
+    // save2file(V,"V.txt");
+    // save2file(P,"P.txt");
 	Z=P*Z;
 	return Z;
+}
+int NormalUtil::predictClusterNumber(const VectorXd& s, double tau){
+    int n=s.size();
+	double soft_thresholding=0.0;
+	for (int i=0;i<n;i++)
+	{
+		if(s(i)>=tau)
+			soft_thresholding=soft_thresholding+1;
+		else
+			soft_thresholding=soft_thresholding+(double)log2(double(1+(s(i)/tau)*(s(i)/tau)));
+	}
+	int subspace_num=n-round(soft_thresholding);
+	if (subspace_num>3)
+	{
+		qDebug()<<"subspace_num:"<<subspace_num;
+	}
+	return subspace_num;
 }
 
 int NormalUtil::predictClusterNumber(MatrixXd& L, double tau){
@@ -309,18 +412,58 @@ int NormalUtil::predictClusterNumber(MatrixXd& L, double tau){
 	return subspace_num;
 }
 
+
+vcluster NormalUtil::spectral_clustering(Eigen::MatrixXd& U,Eigen::VectorXd& s,Eigen::MatrixXd& V,Eigen::MatrixXd& P){
+    // pcl::StopWatch timer;
+    // double passed=0.0;
+    // timer.reset();
+	s=s.cwiseSqrt();
+	MatrixXd U_tiled=P*U*(s.asDiagonal());
+	for (int i=0;i<U_tiled.rows();i++)
+	{
+		U_tiled.row(i)=U_tiled.row(i)/U_tiled.row(i).norm();
+	}
+	MatrixXd S=U_tiled*(U_tiled.adjoint());
+	S=S.array().square();
+    // passed=timer.getTime();
+    // qDebug()<<"preop takes="<<passed;
+    // timer.reset();
+	MatrixXd L=compute_laplacian(S);
+    // passed=timer.getTime();
+    // qDebug()<<"compute Laplacian takes="<<passed;
+    // predict the cluster number
+    // timer.reset();
+    //直接计算L的特征值和特征向量，避免在spectral里再计算一次
+    SelfAdjointEigenSolver<MatrixXd> es(L);
+	int k=predictClusterNumber(es.eigenvalues(),Parameter::instance()->tau);
+    // passed=timer.getTime();
+    // qDebug()<<"predictClusterNumber takes="<<passed;
+	// spectral clustering
+    // timer.reset();
+	vcluster clusters = spectral(es.eigenvectors(), k); //每一列是是一个特征向量
+    // passed=timer.getTime();
+    // qDebug()<<"k-means takes="<<passed;
+	return clusters;
+
+}
+
+
 vcluster NormalUtil::spectral_clustering(MatrixXd& W){
-	pcl::StopWatch timer;
-	double passed=0.0;
-	//timer.reset();
+    pcl::StopWatch timer;
+    double passed=0.0;
+    timer.reset();
 	Eigen::JacobiSVD<Eigen::MatrixXd> svd(W, Eigen::ComputeThinU |
 		Eigen::ComputeThinV);
-	passed=timer.getTime();
-	//qDebug()<<"svd takes="<<passed;
-	//timer.reset();
+    passed=timer.getTime();
+    qDebug()<<"svd takes="<<passed;
+    timer.reset();
 	VectorXd s=svd.singularValues();
 	MatrixXd U=svd.matrixU();
 	MatrixXd V=svd.matrixV();
+    // save2file(U,"U1.txt");
+    // save2file(s,"s1.txt");
+    // save2file(V,"V1.txt");
+
 	s=s.cwiseSqrt();
 	MatrixXd U_tiled=U*(s.asDiagonal());
 	for (int i=0;i<U_tiled.rows();i++)
@@ -329,23 +472,22 @@ vcluster NormalUtil::spectral_clustering(MatrixXd& W){
 	}
 	MatrixXd S=U_tiled*(U_tiled.adjoint());
 	S=S.array().square();
-	//passed=timer.getTime();
-	//qDebug()<<"preop takes="<<passed;
+    passed=timer.getTime();
+    qDebug()<<"preop takes="<<passed;
+    timer.reset();
 	MatrixXd L=compute_laplacian(S);
-	//timer.reset();
-	//passed=timer.getTime();
-	//qDebug()<<"compute Laplacian takes="<<passed;
+    passed=timer.getTime();
+    qDebug()<<"compute Laplacian takes="<<passed;
 	// predict the cluster number
-	//timer.reset();
+    timer.reset();
 	int k=predictClusterNumber(L,Parameter::instance()->tau);
-	//qDebug()<<"分类数="<<k;
-	//passed=timer.getTime();
-	//qDebug()<<"predictClusterNumber takes="<<passed;
+    passed=timer.getTime();
+    qDebug()<<"predictClusterNumber takes="<<passed;
 	// spectral clustering
-	//timer.reset();
+    timer.reset();
 	vcluster clusters = spectral(S, k, 0.01, 10);
-	//passed=timer.getTime();
-	//qDebug()<<"k-means takes="<<passed;
+    passed=timer.getTime();
+    qDebug()<<"k-means takes="<<passed;
 	return clusters;
 }
 
@@ -377,8 +519,8 @@ void NormalUtil::printVector(VectorXd& v){
 	}
 }
 MatrixXd NormalUtil::compute_laplacian(MatrixXd& W){
-	pcl::StopWatch timer;
-	double passed=0.0;
+	// pcl::StopWatch timer;
+	// double passed=0.0;
 	int i, j, n = W.rows();
 	double c;
 	MatrixXd D = MatrixXd::Zero(n, n);
@@ -390,9 +532,9 @@ MatrixXd NormalUtil::compute_laplacian(MatrixXd& W){
 	forn(i, n) {
 		D(i,i)=1/sqrt(D(i,i));
 	}
-	timer.reset();
+	// timer.reset();
 	MatrixXd L=MatrixXd::Identity(n,n)-D*W*D;
-	passed=timer.getTime();
+	// passed=timer.getTime();
 	//qDebug()<<"lap2="<<passed;
 	return L;
 }
