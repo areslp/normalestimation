@@ -538,3 +538,15 @@ MatrixXd NormalUtil::compute_laplacian(MatrixXd& W){
 	//qDebug()<<"lap2="<<passed;
 	return L;
 }
+
+
+void Parameter::loadparam(){
+	// Parameter():k(100),lambda(1.0),tau(8e-1),kpca(200),orientation(100),curvature(0.01){}
+    ifstream paramfile("param.txt");
+    paramfile>>Parameter::instance()->kpca;
+    paramfile>>Parameter::instance()->k;
+    paramfile>>Parameter::instance()->orientation;
+    paramfile>>Parameter::instance()->tau;
+    paramfile>>Parameter::instance()->curvature;
+    paramfile.close();
+}

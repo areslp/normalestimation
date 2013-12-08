@@ -70,7 +70,11 @@ public:
     int k;
     double lambda;
     double tau; // smaller --> smoother 
-	Parameter():k(0),lambda(1.0),tau(8e-1){}
+
+    int kpca;
+    int orientation;
+    float curvature; 
+	Parameter():k(100),lambda(1.0),tau(8e-1),kpca(200),orientation(100),curvature(0.01){}
     static Parameter* instance(){
         if (instance_) {
             return instance_;
@@ -84,6 +88,7 @@ public:
             delete instance_;
         }
     }
+    void loadparam();
 private: 
     static Parameter* instance_;
 };

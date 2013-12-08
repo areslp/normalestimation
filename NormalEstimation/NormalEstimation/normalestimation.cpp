@@ -81,8 +81,9 @@ void NormalEstimation::open(){
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
     pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
 
-    int neighbor_nb=200;
-    Parameter::instance()->k=100;
+    Parameter::instance()->loadparam();    
+
+    int neighbor_nb=Parameter::instance()->kpca;
 	
 	QByteArray ba = path.toLatin1();
 	const char *c_str2 = ba.data();
@@ -92,8 +93,8 @@ void NormalEstimation::open(){
         cloud=NormalUtil::readPointCloud(filename);
         normals=NormalUtil::estimatePCANormal(cloud,neighbor_nb);
         qDebug()<<"pca normal compute complete";
-        NormalUtil::write_pointset(cloud,normals,"pca.xyzn");
-        orientation_normals(cloud, normals, 100);
+        // NormalUtil::write_pointset(cloud,normals,"pca.xyzn");
+        orientation_normals(cloud, normals, Parameter::instance()->orientation);
         qDebug()<<"normal orientation complete";
     }else if(path.endsWith("xyzn",Qt::CaseInsensitive)){
         NormalUtil::readPointCloud(filename,cloud,normals);
@@ -122,12 +123,12 @@ void NormalEstimation::open(){
     for (int i=0;i<cloud->size();i++)
 	{
         double curvature=normals->points[i].curvature;
-        // if ( curvature < 0.01 )
-        // {
-            // out_normals->points[i]=normals->points[i];
-            // ++skip;
-            // continue;
-        // }
+        if ( curvature < Parameter::instance()->curvature )
+        {
+            out_normals->points[i]=normals->points[i];
+            ++skip;
+            continue;
+        }
         std::map<int,int> mapping;
         int curIdx;
 		pcl::PointXYZ searchPoint=cloud->points[i];
