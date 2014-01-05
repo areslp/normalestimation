@@ -93,7 +93,7 @@ void NormalEstimation::open(){
         cloud=NormalUtil::readPointCloud(filename);
         normals=NormalUtil::estimatePCANormal(cloud,neighbor_nb);
         qDebug()<<"pca normal compute complete";
-        // NormalUtil::write_pointset(cloud,normals,"pca.xyzn");
+        NormalUtil::write_pointset(cloud,normals,"pca.xyzn");
         orientation_normals(cloud, normals, Parameter::instance()->orientation);
         qDebug()<<"normal orientation complete";
     }else if(path.endsWith("xyzn",Qt::CaseInsensitive)){
